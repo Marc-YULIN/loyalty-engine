@@ -1,41 +1,64 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json.Serialization;
+using Loyalty.Api.Endpoints;
+using Loyalty.Core;
+using Loyalty.Infrastructure;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.Extensions.Options;
+using Scalar.AspNetCore;
+
 var builder = WebApplication.CreateBuilder(args);
-
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
-
+builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
+    context.ProblemDetails.Extensions.TryAdd("code", "http_error"));
+builder.Services.AddHealthChecks();
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
+builder.Services.AddOptions<SecurityOptions>().BindConfiguration("Security").ValidateDataAnnotations().ValidateOnStart();
+builder.Services.AddLoyaltyInfrastructure(builder.Configuration);
 var app = builder.Build();
-
-// Configure the HTTP request pipeline.
+app.UseExceptionHandler(handler => handler.Run(async context =>
+{
+    var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+    var (status, code, detail) = exception switch
+    {
+        DomainException domain => (domain.StatusCode, domain.Code, domain.Message),
+        BadHttpRequestException bad => (bad.StatusCode, "invalid_request", "The request could not be read."),
+        _ => (500, "internal_error", "An unexpected error occurred.")
+    };
+    context.Response.StatusCode = status;
+    await Results.Problem(statusCode: status, title: code, detail: detail,
+        extensions: new Dictionary<string, object?> { ["code"] = code }).ExecuteAsync(context);
+}));
+app.UseStatusCodePages();
+app.Use(async (context, next) =>
+{
+    if (!context.Request.Path.Equals("/health", StringComparison.OrdinalIgnoreCase))
+    {
+        var expected = context.RequestServices.GetRequiredService<IOptions<SecurityOptions>>().Value.ApiKey;
+        var supplied = context.Request.Headers["X-Api-Key"];
+        if (supplied.Count != 1 || !CryptographicOperations.FixedTimeEquals(
+            SHA256.HashData(Encoding.UTF8.GetBytes(supplied.ToString())), SHA256.HashData(Encoding.UTF8.GetBytes(expected))))
+        {
+            await Results.Problem(statusCode: 401, title: "Unauthorized", extensions:
+                new Dictionary<string, object?> { ["code"] = "invalid_api_key" }).ExecuteAsync(context);
+            return;
+        }
+    }
+    await next(context);
+});
+app.MapOpenApi();
+app.MapScalarApiReference();
+app.MapHealthChecks("/health");
+app.MapMembers();
+app.MapEvents();
+app.MapCampaigns();
+app.MapCoupons();
+app.MapAdministration();
+await app.Services.InitializeLoyaltyDatabaseAsync(app.Lifetime.ApplicationStopping);
 if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
-
-app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
-
+    await app.Services.GetRequiredService<DemoDataSeeder>().SeedAsync(app.Lifetime.ApplicationStopping);
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+public partial class Program;
