@@ -2,6 +2,8 @@
 
 # loyalty-engine
 
+[![CI](https://github.com/Marc-YULIN/loyalty-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Marc-YULIN/loyalty-engine/actions/workflows/ci.yml) ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4) ![License: MIT](https://img.shields.io/badge/license-MIT-green)
+
 提供滾動會員等級、回饋金帳務、具備故障降級能力的排行榜與優惠券箱的會員忠誠度 API。
 
 ## Background
