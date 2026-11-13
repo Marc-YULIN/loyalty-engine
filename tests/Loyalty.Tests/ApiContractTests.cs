@@ -10,22 +10,33 @@ namespace Loyalty.Tests;
 
 public sealed class ApiContractTests
 {
-    [Theory]
-    [InlineData("/api/members/00000000-0000-0000-0000-000000000001")]
-    [InlineData("/openapi/v1.json")]
-    [InlineData("/scalar/v1")]
-    public async Task GetAsync_MissingApiKey_ReturnsUnauthorizedProblem(string path)
+    [Fact]
+    public async Task GetAsync_MissingApiKey_ReturnsUnauthorizedProblem()
     {
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var ct = cancellation.Token;
         using var factory = new LoyaltyApiFactory();
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync(path, ct);
+        using var response = await client.GetAsync("/api/members/00000000-0000-0000-0000-000000000001", ct);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
         Assert.Equal("invalid_api_key", (await response.Content.ReadFromJsonAsync<JsonElement>(ct)).GetProperty("code").GetString());
+    }
+
+    [Theory]
+    [InlineData("/openapi/v1.json")]
+    [InlineData("/scalar/v1")]
+    public async Task GetAsync_DocumentationWithoutApiKey_ReturnsOk(string path)
+    {
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var factory = new LoyaltyApiFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(path, cancellation.Token);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
@@ -50,7 +61,7 @@ public sealed class ApiContractTests
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", multipleKeys ? ["test-loyalty-key", "test-loyalty-key"] : ["wrong-key"]);
 
-        using var response = await client.GetAsync("/openapi/v1.json", cancellation.Token);
+        using var response = await client.GetAsync("/api/members/00000000-0000-0000-0000-000000000001", cancellation.Token);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

@@ -34,7 +34,8 @@ app.UseExceptionHandler(handler => handler.Run(async context =>
 app.UseStatusCodePages();
 app.Use(async (context, next) =>
 {
-    if (!context.Request.Path.Equals("/health", StringComparison.OrdinalIgnoreCase))
+    // Only business endpoints are protected; /health, /openapi and /scalar stay public so the API can be explored.
+    if (context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase))
     {
         var expected = context.RequestServices.GetRequiredService<IOptions<SecurityOptions>>().Value.ApiKey;
         var supplied = context.Request.Headers["X-Api-Key"];

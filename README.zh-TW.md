@@ -6,11 +6,11 @@
 
 提供滾動會員等級、回饋金帳務、具備故障降級能力的排行榜與優惠券箱的會員忠誠度 API。
 
-## Background
+## 背景
 
 本專案萃取自我在正式環境建置及維運金流／會員平台的實務模式，以獨立重新實作與合成資料呈現。
 
-## Features
+## 功能
 
 - 可設定的 30 天消費等級、即時升級，以及警告 14 天後每次降一級的寬限機制。
 - 依等級及商品類別計算回饋金，支援比例退款沖回、UTC 每日領取上限與冪等重送。
@@ -18,7 +18,13 @@
 - 依會員名單或等級批次發券，支援到期、原子兌換及折扣帳本。
 - API 金鑰保護、結構化問題回應、OpenAPI、Scalar、健康檢查與合成示範資料。
 
-## Architecture
+## 畫面截圖
+
+<img src="docs/images/api-reference.png" alt="API 文件（Scalar）">
+
+*API 文件（Scalar）*
+
+## 架構
 
 ```mermaid
 flowchart LR
@@ -34,14 +40,14 @@ flowchart LR
 
 完整時序、狀態與資料模型見[架構文件 (architecture.md)](docs/architecture.md)。
 
-## Tech Stack
+## 技術組成
 
 - .NET 10、ASP.NET Core Minimal API、EF Core SQLite。
 - StackExchange.Redis 與程序內記憶體快取。
 - OpenAPI 與 Scalar；xUnit、NSubstitute 及程序內 API 整合測試。
 - Docker Compose 與主分支建置／測試工作流程。
 
-## Getting Started
+## 快速開始
 
 先安裝 SDK 鎖定設定檔 (global.json) 指定的 .NET 10 SDK，在專案根目錄執行：
 
@@ -53,7 +59,7 @@ dotnet run --project src/Loyalty.Api --no-restore --launch-profile http
 
 開發啟動設定 (http) 使用 `http://localhost:5105`，自動建立 5 位會員、2 個優惠券範本、1 個活動及橫跨 60 天的購買資料。預設不需要 Redis。SQLite 檔案位於 API 內容目錄下的 `appdata`；啟動建庫方法 (EnsureCreatedAsync) 只建立結構，不遷移既有資料庫。
 
-`http://localhost:5105/health` 可直接存取。其餘路徑包含 `/openapi/v1.json` 與 `/scalar`，開發環境都需要 `X-Api-Key: dev-loyalty-key`。瀏覽文件時需使用能替文件請求附加此標頭的瀏覽器或客戶端。
+`/health`、OpenAPI 文件（`/openapi/v1.json`）與 Scalar 介面（`http://localhost:5105/scalar`）可直接開啟；所有 `/api/*` 路徑在開發環境都需要 `X-Api-Key: dev-loyalty-key`。
 
 容器示範先設定至少 8 個字元的金鑰，再啟動兩個服務（PowerShell）：
 
@@ -72,7 +78,7 @@ docker compose up --build -d --no-deps api
 
 非示範部署請使用 Production、自行設定私密金鑰，並透過 API 建立會員與範本；示範資料僅在 Development 提供。管理與會員操作共用同一把 API 金鑰，目前沒有會員登入或租戶隔離。
 
-## Configuration
+## 設定
 
 採用 .NET 標準設定來源；環境變數以 `__` 取代 `:`。設定不合法時，應用程式會在啟動時失敗。
 
@@ -89,7 +95,7 @@ docker compose up --build -d --no-deps api
 | 回饋比例 (Loyalty:CashbackRates) | Bronze 0.005；Silver 0.0075；Gold 0.01；Platinum 0.02 | 通用類別比例；Gold 電子商品 0.015，Platinum 電子商品 0.025。 |
 | 每日領取上限 (Loyalty:DailyClaimCap) | Bronze 20；Silver 50；Gold 150；Platinum 500 | 依目前等級與 UTC 日期計算。 |
 
-## API Walkthrough
+## API 操作範例
 
 Development 伺服器啟動後，以裝有 curl 的 PowerShell 7.3 以上版本執行整段指令；若使用 Compose，請換成前面設定的金鑰。每次建立新的會員、活動、範本與批次。輔助函式將 JSON 傳給 curl，HTTP 失敗時停止。
 
@@ -171,7 +177,7 @@ Invoke-LoyaltyApi GET "/api/members/$memberId"
 
 批次事件最多 500 筆，回傳逐筆結果。優惠券也可依等級發放；百分比使用小數（0.1 表示 10%）。重送時沿用批次識別，新的發放使用新的識別。錯誤採 ProblemDetails 與機器可讀的錯誤碼：未帶 API 金鑰回 401、未帶領取冪等鍵回 400、優惠券不可用回 409、訂單未達低消回 422。
 
-## Design Decisions
+## 設計取捨
 
 1. **資料庫為正本，Redis 為選用加速層。** 事件、錢包、帳本與活動分數在同一交易提交後，才更新 Redis；Redis 失敗會開啟 30 秒斷路並改讀資料庫。熱門名單快取 5 秒，因此來源切換可能延後。恢復時從已提交分數重建投影。資料庫同分先比更新時間，再比會員識別；Redis 同分使用原生會員反向排序，因此兩種來源的同分名次可能不同。
 2. **升級即時，降級漸進。** 購買可直接跳級，再以新等級計算該筆回饋；退款不立即降級。每日或手動審查先建立警告，寬限後每次只降一級，降低等級反覆變動。
@@ -182,7 +188,7 @@ Invoke-LoyaltyApi GET "/api/members/$memberId"
 7. **SQLite 使用定點金額。** 領域計算使用 decimal，持久化時乘以 10000 存入有號 64 位元整數，讓 SQL 加總、排序與比較不必轉浮點數。輸入最多 4 位小數且不可超過儲存上限。Redis 分數使用浮點投影，精確值仍以 SQLite 為準；UTC 時間以 ticks 儲存。
 8. **示範範圍與已知限制。** 建庫流程只適用新資料庫，不處理結構升級。活動必須先於購買進件建立：事後新增、起始時間回溯的活動，現有模型無法精準歸屬舊購買貢獻，也未實作歷史補算。活動獎勵只有描述，沒有自動發獎。等級審查時間應向前推進，不提供目前會員狀態的歷史回溯重建。
 
-## Testing
+## 測試
 
 ```sh
 dotnet build Loyalty.slnx --no-restore
@@ -191,7 +197,7 @@ dotnet test Loyalty.slnx --no-restore
 
 測試涵蓋等級轉換、捨入／退款、領取上限、優惠券規則、重複事件、並行領取、冪等重播、並行兌換、批次重送、資料庫同分排序、快取失效、斷路恢復及 API 驗證。整合測試類別使用獨立暫存 SQLite、可控時鐘，不連線真實 Redis；真實 Redis 恢復與容器執行需另做冒煙測試。
 
-## Project Structure
+## 專案結構
 
 ```text
 src/Loyalty.Core/             實體、合約、設定、純規則
@@ -204,13 +210,13 @@ docker-compose.yml           API、Redis、SQLite 持久化 volume
 .github/workflows/ci.yml      主分支建置與測試
 ```
 
-## Roadmap
+## 後續規劃
 
 - 逐事件活動貢獻歷程與明確定義的歷史補算。
 - 結構遷移、會員範圍授權與分散式寫入擴展。
 - 可持久重試的投影更新，以及跨排行榜來源一致的同分規則。
 - 自動發獎與已領取回饋退款的回收政策。
 
-## License
+## 授權
 
 [MIT](LICENSE)。

@@ -18,6 +18,12 @@ Distilled from patterns I built and operated in production payment / membership 
 - Coupon batches by member list or tier, expiration, and atomic redemption with an audit ledger.
 - API-key protection, structured problem responses, OpenAPI, Scalar, health checks, and synthetic demo data.
 
+## Screenshots
+
+<img src="docs/images/api-reference.png" alt="API reference (Scalar)">
+
+*API reference (Scalar)*
+
 ## Architecture
 
 ```mermaid
@@ -53,7 +59,7 @@ dotnet run --project src/Loyalty.Api --no-restore --launch-profile http
 
 The Development profile listens on `http://localhost:5105`, automatically seeds five members, two coupon templates, a campaign, and purchases spanning 60 days. Redis is disabled by default. The SQLite file is created under the API content directory's `appdata` folder. Schema creation uses `EnsureCreatedAsync`; existing schemas are not migrated.
 
-Health is public at `http://localhost:5105/health`. Every other route, including `/openapi/v1.json` and `/scalar`, requires `X-Api-Key: dev-loyalty-key` in Development. Use a browser/client that can attach that header to documentation requests.
+`/health`, the OpenAPI document (`/openapi/v1.json`) and the Scalar UI (`http://localhost:5105/scalar`) are public. Every `/api/*` route requires `X-Api-Key: dev-loyalty-key` in Development.
 
 For the container demo, set an API key of at least eight characters and start both services (PowerShell):
 
